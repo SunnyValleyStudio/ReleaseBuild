@@ -7,7 +7,6 @@ using UnityEngine.Tilemaps;
 
 public class WaveFunctionCollapse : MonoBehaviour
 {
-
     [SerializeField] Tilemap InputMap; //The input tilemap to take
     [SerializeField] Tilemap outputMap; //Where the output will be going
     TileBase[] allTiles; //This is needed to take a 1D array of tiles form the inputTilemap. 
@@ -21,18 +20,55 @@ public class WaveFunctionCollapse : MonoBehaviour
     Vector2Int entropyHandlerVector; //When we calculate entropy, we are going to find any element that has not been solved , but is less then any element in the list. 
     bool foundEntropy = false; //This marks when we have found places that have less then the normal amount of options
     public bool wrapping = true; //This handles wrapping elements from the array. if they are wrapping, then edge elements will select items from the other side of the array. 
-    //Turning wrapping off decreases solve rate. 
+                                 //Turning wrapping off decreases solve rate. 
 
     //will need an editor button to run the script
     // Start is called before the first frame update
-    void Start()
+
+    public void Run()
     {
-       InputTileHandler(); //Handles the input we are working with, converting it from a tilemap, into a list of possibletiles.
-       WFCSetup(); //takes the list of possible tiles and converts them into an array full of possibilities. 
+        WFCHumbleObject wfcHelper = new WFCHumbleObject(InputMap, outputMap, outputArraySize, wrapping);
+        wfcHelper.RunWFC();
+
+    }
+}
+
+public class WFCHumbleObject
+{
+    [SerializeField] Tilemap InputMap; //The input tilemap to take
+    [SerializeField] Tilemap outputMap; //Where the output will be going
+    TileBase[] allTiles; //This is needed to take a 1D array of tiles form the inputTilemap. 
+    BoundsInt bounds; //The area of the tilemap. needed to lopop through the 1D array, allTiles, to put into our 2D array. 
+    TileBase[,] inputTiles; //A 2D array that we create to take the info from each of our tiles before transfering it to your 2D araay of containers. A later update could likely remove this. 
+    TileContainer[,] inputMapContainer; //Our 2D array that we will be using to go through each tile, adding neighbours, before recombining into a list. 
+    List<TileContainer> AllPossibleTiles = new List<TileContainer>(); //Our list that we will be using for WFC itself. this will have the info of each tile, and what each possible neighbour can be. 
+
+    List<TileContainer>[,] outputArray; //This array of lists holds the output tiles we will be using. 
+    public int outputArraySize; //How big we want to make our output array size. 
+    Vector2Int entropyHandlerVector; //When we calculate entropy, we are going to find any element that has not been solved , but is less then any element in the list. 
+    bool foundEntropy = false; //This marks when we have found places that have less then the normal amount of options
+    public bool wrapping = true; //This handles wrapping elements from the array. if they are wrapping, then edge elements will select items from the other side of the array. 
+                                 //Turning wrapping off decreases solve rate. 
+    private bool printToConsole;
+    //will need an editor button to run the script
+    // Start is called before the first frame update
+
+    public WFCHumbleObject(Tilemap InputMap, Tilemap outputMap, int outputArraySize, bool wrapping, bool printToConsole = false)
+    {
+        this.InputMap = InputMap;
+        this.outputMap = outputMap;
+        this.outputArraySize = outputArraySize;
+        this.wrapping = wrapping;
+        this.printToConsole = printToConsole;
+    }
+    public bool RunWFC()
+    {
+        InputTileHandler(); //Handles the input we are working with, converting it from a tilemap, into a list of possibletiles.
+        WFCSetup(); //takes the list of possible tiles and converts them into an array full of possibilities. 
 
         //A simple do while loop handles us passing through each object one at a time. 
         //If checkifComplete returns true, we keep going through until we finally finish each element in the array. 
-
+        int maxIterations = 10000;
         bool dountilcomplete = false;
         do
         {
@@ -50,12 +86,16 @@ public class WaveFunctionCollapse : MonoBehaviour
             {
                 WFCRandomPass();
             }
-
+            maxIterations--;
             dountilcomplete = checkifComplete();
-        } while (dountilcomplete == false) ;
-        Debug.Log("Were done");
+        } while (dountilcomplete == false && maxIterations > 0);
+        if (dountilcomplete == false || maxIterations <= 0)
+        {
+            return false;
+        }
+
         outputHandler();
-    
+        return true;
     }
 
     private void WFCRandomPass()
@@ -74,7 +114,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
         else
         {
-            Debug.Log("Has already Been collapsed at " + xRandom + " " + yRandom);
+            PrintToConsole("Has already Been collapsed at " + xRandom + " " + yRandom);
         }
     }
 
@@ -88,7 +128,7 @@ public class WaveFunctionCollapse : MonoBehaviour
             WaveFunction(entropyHandlerVector.x, entropyHandlerVector.y);
             CollisionCheck();
         }
-        
+
     }
 
 
@@ -102,13 +142,13 @@ public class WaveFunctionCollapse : MonoBehaviour
         {
             for (int y = 0; y < outputArraySize; y++)
             {
-                if(outputArray[x,y].First<TileContainer>().hasBeenCollapsed == false)
+                if (outputArray[x, y].First<TileContainer>().hasBeenCollapsed == false)
                 {
-                    if(outputArray[x,y].Count != AllPossibleTiles.Count)
+                    if (outputArray[x, y].Count != AllPossibleTiles.Count)
                     {
-                        tempListofEntropy.Add( new Vector2Int(x, y));
+                        tempListofEntropy.Add(new Vector2Int(x, y));
                         foundEntropy = true;
-                        Debug.Log(" We found some!");
+                        PrintToConsole(" We found some!");
                     }
                 }
             }
@@ -131,7 +171,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         //This checks to see if every tile has been collapsed/
         //If every tile has not been collapsed, then we need to continue running the algorhthm.
         //If it has, then we can output the array.
-       
+
         for (int x = 0; x < outputArraySize; x++)
         {
             for (int y = 0; y < outputArraySize; y++)
@@ -143,7 +183,7 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
-        Debug.Log("All done!");
+        PrintToConsole("All done!");
         return true;
     }
 
@@ -157,12 +197,12 @@ public class WaveFunctionCollapse : MonoBehaviour
         {
             for (int y = 0; y < outputArraySize; y++)
             {
-                if(outputArray[x,y].Count == 0)
+                if (outputArray[x, y].Count == 0)
                 {
                     //We have a collision
-                      throw new Exception("We have a collision, PLease restart. COllision at " + x + " and " + y) ;
+                    throw new Exception("We have a collision, PLease restart. COllision at " + x + " and " + y);
 
-                  
+
                 }
             }
         }
@@ -187,17 +227,17 @@ public class WaveFunctionCollapse : MonoBehaviour
     {
         //This is where we process the array. We choose a random element of the list, and delete all the others. This is now our collapsed position. 
         // We then set that it has been collapsed, and remove all the other elements.
-        
 
-        int RandomChoice = UnityEngine.Random.Range(0, outputArray[xPosition,yPosition].Count);
+
+        int RandomChoice = UnityEngine.Random.Range(0, outputArray[xPosition, yPosition].Count);
         outputArray[xPosition, yPosition][RandomChoice].hasBeenCollapsed = true;
         outputArray[xPosition, yPosition].RemoveAll(i => i.hasBeenCollapsed == false);
 
-    /*    Debug.Log("Collapsed" + xPosition + " and " + yPosition);
-        foreach(TileContainer leftover in outputArray[xPosition,yPosition])
-        {
-            Debug.Log( "Leftover tiles (should be one) "+leftover.SingleTile.name);
-        }*/
+        /*    PrintToConsole("Collapsed" + xPosition + " and " + yPosition);
+            foreach(TileContainer leftover in outputArray[xPosition,yPosition])
+            {
+                PrintToConsole( "Leftover tiles (should be one) "+leftover.SingleTile.name);
+            }*/
 
         //We are left with a tile simpletile, and a list of tiles in each direction.
 
@@ -224,16 +264,16 @@ public class WaveFunctionCollapse : MonoBehaviour
                     if (!outputArray[xPosition, yPosition][0].possibleUpTiles.Contains(tileToSeeifInList.SingleTile))
                     {
                         tileToSeeifInList.removethisElement = true;
-                        Debug.Log("up Removing" + tileToSeeifInList.SingleTile.name);
+                        PrintToConsole("up Removing" + tileToSeeifInList.SingleTile.name);
                     }
                 }
             }
-                outputArray[xPosition + 1, yPosition].RemoveAll(i => i.removethisElement == true);
-            
+            outputArray[xPosition + 1, yPosition].RemoveAll(i => i.removethisElement == true);
+
         }
         else
         {
-            Debug.Log("NO up element");
+            PrintToConsole("NO up element");
         }
 
         if (xPosition - 1 >= 0)
@@ -247,11 +287,11 @@ public class WaveFunctionCollapse : MonoBehaviour
                     if (!outputArray[xPosition, yPosition][0].possibleDownTiles.Contains(tileToSeeifInList.SingleTile))
                     {
                         tileToSeeifInList.removethisElement = true;
-                        Debug.Log("down Removing" + tileToSeeifInList.SingleTile.name);
+                        PrintToConsole("down Removing" + tileToSeeifInList.SingleTile.name);
                     }
                     else
                     {
-                        Debug.Log("Didnt remove this element, is in our list down");
+                        PrintToConsole("Didnt remove this element, is in our list down");
                     }
                 }
             }
@@ -260,7 +300,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
         else
         {
-            Debug.Log("NO down element");
+            PrintToConsole("NO down element");
         }
 
         if (yPosition + 1 < outputArraySize)
@@ -273,11 +313,11 @@ public class WaveFunctionCollapse : MonoBehaviour
                     if (!outputArray[xPosition, yPosition][0].possibleLeftTiles.Contains(tileToSeeifInList.SingleTile))
                     {
                         tileToSeeifInList.removethisElement = true;
-                        Debug.Log("left Removing" + tileToSeeifInList.SingleTile.name);
+                        PrintToConsole("left Removing" + tileToSeeifInList.SingleTile.name);
                     }
                     else
                     {
-                        Debug.Log("Didnt remove this element, is in our list left");
+                        PrintToConsole("Didnt remove this element, is in our list left");
                     }
                 }
             }
@@ -286,7 +326,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
         else
         {
-            Debug.Log("NO left element");
+            PrintToConsole("NO left element");
         }
 
         if (yPosition - 1 >= 0)
@@ -299,11 +339,11 @@ public class WaveFunctionCollapse : MonoBehaviour
                     if (!outputArray[xPosition, yPosition][0].possibleRightTiles.Contains(tileToSeeifInList.SingleTile))
                     {
                         tileToSeeifInList.removethisElement = true;
-                        Debug.Log("right Removing" + tileToSeeifInList.SingleTile.name);
+                        PrintToConsole("right Removing" + tileToSeeifInList.SingleTile.name);
                     }
                     else
                     {
-                        Debug.Log("Didnt remove this element, is in our list right");
+                        PrintToConsole("Didnt remove this element, is in our list right");
                     }
                 }
             }
@@ -312,7 +352,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
         else
         {
-            Debug.Log("NO right element");
+            PrintToConsole("NO right element");
         }
     }
 
@@ -324,9 +364,9 @@ public class WaveFunctionCollapse : MonoBehaviour
         outputArray = new List<TileContainer>[outputArraySize, outputArraySize];
 
         //Then loop through it, and put each possible tile in each spot. This is the unconstrainted step
-       for(int x = 0; x < outputArraySize; x++)
+        for (int x = 0; x < outputArraySize; x++)
         {
-            for (int y= 0; y < outputArraySize; y++)
+            for (int y = 0; y < outputArraySize; y++)
             {
                 //  TileContainer[] tempArray = new TileContainer[AllPossibleTiles.Count];
                 //  AllPossibleTiles.CopyTo(tempArray);
@@ -334,13 +374,13 @@ public class WaveFunctionCollapse : MonoBehaviour
                 outputArray[x, y] = new List<TileContainer>();
                 foreach (TileContainer ToCopy in AllPossibleTiles)
                 {
-                  
+
                     outputArray[x, y].Add(ToCopy.DeepCopy());
                 }
-               // outputArray[x, y].AddRange(AllPossibleTiles);
+                // outputArray[x, y].AddRange(AllPossibleTiles);
 
                 //Now we go thorugh each option in the list and make the collisionx and y, the location of the square in case we need to find it, due to a collisison.
-                foreach (TileContainer colhandler in outputArray[x,y])
+                foreach (TileContainer colhandler in outputArray[x, y])
                 {
                     colhandler.collisionX = x;
                     colhandler.collisionY = y;
@@ -368,7 +408,7 @@ public class WaveFunctionCollapse : MonoBehaviour
                 {
                     //The array should have no holes in it, but just in case. 
 
-                    Debug.Log("Null tile, will not work, location: " + x + " and " + y);
+                    PrintToConsole("Null tile, will not work, location: " + x + " and " + y);
                     break;
                 }
                 //This take the 2D array, and turns it into a 2D array. 
@@ -403,11 +443,11 @@ public class WaveFunctionCollapse : MonoBehaviour
                 {
                     inputMapContainer[x, y].possibleDownTiles.Add(inputMapContainer[x + 1, y].SingleTile);
                 }
-                else if(wrapping == true)
+                else if (wrapping == true)
                 {
                     inputMapContainer[x, y].possibleDownTiles.Add(inputMapContainer[0, y].SingleTile);
                 }
-                 
+
                 //This statement handles the Up direction. 
 
                 if (x - 1 >= 0)
@@ -416,7 +456,7 @@ public class WaveFunctionCollapse : MonoBehaviour
                 }
                 else if (wrapping == true)
                 {
-                    inputMapContainer[x, y].possibleUpTiles.Add(inputMapContainer[bounds.size.x-1, y].SingleTile);
+                    inputMapContainer[x, y].possibleUpTiles.Add(inputMapContainer[bounds.size.x - 1, y].SingleTile);
                 }
 
                 //This statement handles the right direction
@@ -427,7 +467,7 @@ public class WaveFunctionCollapse : MonoBehaviour
                 }
                 else if (wrapping == true)
                 {
-                    inputMapContainer[x, y].possibleRightTiles.Add(inputMapContainer[x, bounds.size.y-1].SingleTile);
+                    inputMapContainer[x, y].possibleRightTiles.Add(inputMapContainer[x, bounds.size.y - 1].SingleTile);
                 }
 
                 //This statement handles the Left direction
@@ -444,14 +484,14 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         //This step now needs to take each element of the array, and combine them into the list.
         //To do this, we will check if a list contains elements from each part of the array, and if they are the same, we will add each neightbour to  a list of each for that, checking again if any neihbours are the same
-     
+
         foreach (TileContainer TileToCheckfrominput in inputMapContainer)
         {
             if (AllPossibleTiles == null)
             {
                 //Double check we dont have a null list. Small piece of mind. 
 
-                Debug.Log("Not initialized");
+                PrintToConsole("Not initialized");
                 AllPossibleTiles.Add(TileToCheckfrominput);
             }
             else
@@ -460,7 +500,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
                 if (contains != null)
                 {
-                    Debug.Log("Concat elements");
+                    PrintToConsole("Concat elements");
                     contains.possibleUpTiles.Union<TileBase>(TileToCheckfrominput.possibleUpTiles);
                 }
                 else
@@ -472,14 +512,14 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         // In this step we are trying to combine the elements of the list. If two or more elements have the same tile, they combine their lists of possible directional tiles. 
         //This gives us a shorter list that contains all possiblities for them. 
-        
-        for(int TileToCheckListA = AllPossibleTiles.Count -1; TileToCheckListA >= 0; TileToCheckListA--)
+
+        for (int TileToCheckListA = AllPossibleTiles.Count - 1; TileToCheckListA >= 0; TileToCheckListA--)
         {
             for (int TileToCheckListB = AllPossibleTiles.Count - 1; TileToCheckListB >= 0; TileToCheckListB--)
             {
-                if(AllPossibleTiles[TileToCheckListA].SingleTile.name == AllPossibleTiles[TileToCheckListB].SingleTile.name)
+                if (AllPossibleTiles[TileToCheckListA].SingleTile.name == AllPossibleTiles[TileToCheckListB].SingleTile.name)
                 {
-                    if(AllPossibleTiles[TileToCheckListA].collisionX != AllPossibleTiles[TileToCheckListB].collisionX || AllPossibleTiles[TileToCheckListA].collisionY != AllPossibleTiles[TileToCheckListB].collisionY)
+                    if (AllPossibleTiles[TileToCheckListA].collisionX != AllPossibleTiles[TileToCheckListB].collisionX || AllPossibleTiles[TileToCheckListA].collisionY != AllPossibleTiles[TileToCheckListB].collisionY)
                     {
                         if (!AllPossibleTiles[TileToCheckListA].removethisElement)
                         {
@@ -491,7 +531,7 @@ public class WaveFunctionCollapse : MonoBehaviour
                                 //The last checks to make sure one of them hasnt already been iterated over. We cant remove the tiles while trying to loop through them, as it causes exception errors. 
                                 //Instead we mark a bool from the one we are going to remove, and have taken all the information from, and add it to our first one. 
                                 //We also call Distinct toList to remove the aditional elements from the list, after we add them together. This leaves us with only 1 set of each possible tile. 
-                             
+
                                 AllPossibleTiles[TileToCheckListA].possibleUpTiles.AddRange(AllPossibleTiles[TileToCheckListB].possibleUpTiles);
                                 AllPossibleTiles[TileToCheckListA].possibleUpTiles = AllPossibleTiles[TileToCheckListA].possibleUpTiles.Distinct().ToList();
 
@@ -522,11 +562,11 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         AllPossibleTiles.RemoveAll(i => i.removethisElement == true);
 
-        foreach(TileContainer match in AllPossibleTiles)
+        foreach (TileContainer match in AllPossibleTiles)
         {
-            string mainname = "Main: " + match.SingleTile.name, upnames = "\n UP ", downnames = "\n Down ", leftnames= " \n Left ", rightnames = "\n Right ";
+            string mainname = "Main: " + match.SingleTile.name, upnames = "\n UP ", downnames = "\n Down ", leftnames = " \n Left ", rightnames = "\n Right ";
 
-            foreach(TileBase match2 in match.possibleUpTiles)
+            foreach (TileBase match2 in match.possibleUpTiles)
             {
                 upnames = upnames + " \n" + match2.name;
             }
@@ -546,7 +586,7 @@ public class WaveFunctionCollapse : MonoBehaviour
                 rightnames = rightnames + " \n" + match5.name;
             }
 
-            Debug.Log(mainname + upnames + downnames + leftnames + rightnames);
+            PrintToConsole(mainname + upnames + downnames + leftnames + rightnames);
         }
     }
 
@@ -555,12 +595,20 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     void outputHandler()
     {
-        for(int x = 0; x < outputArraySize; x++)
+        for (int x = 0; x < outputArraySize; x++)
         {
-            for (int y = 0; y <outputArraySize; y++)
+            for (int y = 0; y < outputArraySize; y++)
             {
                 outputMap.SetTile(new Vector3Int(x, y, 0), outputArray[x, y].First<TileContainer>().SingleTile);
             }
+        }
+    }
+
+    private void PrintToConsole(string message)
+    {
+        if (printToConsole)
+        {
+            Debug.Log(message);
         }
     }
 }
